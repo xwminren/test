@@ -1,0 +1,323 @@
+<template>
+  <div>
+    <h2>特征提取系统</h2>
+    <hr>
+    <div>
+      <div v-if="cur_step == 1">
+        <h4>在下拉列表中选择主机</h4>
+        <select class="form-control w-25"  @change='changeSelection' v-model="selection_type">
+          <option v-for="hm, i in host_machines" :key="i" :value="hm.machine_id">
+            {{ hm.machine_name }}
+          </option>
+        </select>
+        <br>
+        <div class="my-1">
+          <button class="btn opration btn-info" @click="reload">
+            <font-awesome-icon icon="refresh" />
+          </button>
+          <button @click="$router.go(-1)" class="btn btn-info prevstep">返回</button>
+          <button class="btn btn-primary nextstep btn-next" :disabled='!hm_selected'  @click="nextstep">下一步</button>
+        </div>
+      </div>
+      <div v-if="cur_step == 2" class="my-1">
+        <div v-if="!got_usbs" >
+          <h4>请插入USB存储设备到主机前面板的USB插口</h4>
+          <img src='../assets/images/inject-usb.gif'/>
+        </div>
+        <div v-if="got_usbs">
+          <select class="form-control w-25" @change='changeSelection' v-model="selection_type">
+            <option v-for="us, i in usb_storages" :key="i" :value="us.storage_id">
+              {{ us.storage_name }}
+            </option>
+          </select>
+        </div>
+        <br>
+        <div class="my-1">
+          <button @click="cur_step--" class="btn btn-info prevstep">返回</button>
+          <button class="btn btn-primary nextstep btn-next" :disabled='!us_selected'  @click="nextstep">下一步</button>
+        </div>
+        <div v-if="batch_op == 'bind_product'" class="my-1">
+          <GenericSelector ref="product_selector" uri="/api/v1/product/" display_field="name" @select="(item) => selected_product_id = item.id" />
+        </div>
+      </div>
+      <div v-if="cur_step == 3">
+        <FileSelector ref="file_selector" :cur_folder_path="cur_folder_path"></FileSelector>
+
+        <button class="btn btn-primary opration" @click="show_file_selector">选择文件夹</button>
+        <button class="btn btn-secondary prevstep" @click="cur_step--">上一步</button>
+        <button class="btn btn-primary nextstep" @click="submit" :disabled="busy">提交</button>
+      </div>
+      <div v-if="cur_step == 4">
+        <div>
+          正在执行操作... ({{rounded_percent}}%)
+        </div>
+        <CProgress class="my-3">
+          <CProgressBar :value="percent" />
+        </CProgress>
+      </div>
+      <div v-if="cur_step == 5">
+        <div v-if="!failure && message" class="alert alert-success">
+          {{ message }}
+        </div>
+        <div v-if="failure" class="alert alert-danger">
+          {{ failure }}
+        </div>
+        <button @click="$router.go(-1)" class="btn btn-info prevstep">返回</button>
+      </div>
+    </div>
+    <div>
+    </div>
+
+  </div>
+</template>
+
+<script>
+import FileSelector from '@/components/file-selector.vue';
+import GenericSelector from '../components/generic-selector';
+
+export default {
+  name: 'characterWithdraw',
+  props: [],
+  components: {
+    GenericSelector,
+    FileSelector
+},
+  data: function () {
+    return {
+      percent: 0,
+      cur_step: 1,
+      range_begin: null,
+      range_end: null,
+      selection_type: 'code_input',
+      batch_op: 'activate',
+      nr_affected_rows: null,
+      message: null,
+      failure: null,
+      selected_product_id: null,
+      code_str: '',
+      code_file: null,
+      code_str_maxlength: 1 << 20,
+      busy: 0,
+      host_machines: [],
+      hm_selected: false,
+      usb_storages: [],
+      got_usbs: false,
+      us_selected: false,
+      cur_folder_path:'/'
+    };
+  },
+  computed: {
+    rounded_percent: function() {
+      return Math.floor(this.percent * 10) / 10;
+    },
+    show_affected_rows: function() {
+      return this.selection_type != 'code_file';
+    },
+  },
+  methods: {
+    set_code_file: async function(e) {
+      var fs = e.target.files;
+      if (!fs || !fs.length)
+        return;
+      this.code_file = fs[0];
+    },
+    nextstep: function() {
+      this.cur_step++;
+      if (this.cur_step == 3 && this.show_affected_rows) {
+        this.fetch_affected_rows();
+      }
+    },
+    get_codes: function(lines) {
+      return lines.split(/\r?\n/).filter(this.is_valid_code);
+    },
+    is_valid_code: function(c) {
+      return c.match(/[0-9a-zA-Z]+/);
+    },
+    read_chunk: async function(f, pos, size) {
+      var r = new FileReader();
+      var end = pos + size;
+      if (end > f.size) end = f.size;
+      var b = f.slice(pos, end);
+      r.readAsText(b);
+      var cb = null;
+      var errcb = null;
+      r.onload = () => {
+        cb(r.result);
+      }
+      r.onerror = () => {
+        errcb();
+      }
+      return new Promise((accept, reject) => {
+        cb = accept;
+        errcb = reject;
+      });
+    },
+    iter_line_batches: async function(f, chunk_size, cb) {
+      var prev = "";
+      for (var pos = 0; pos < f.size; pos += chunk_size) {
+        var buf = prev + await this.read_chunk(f, pos, chunk_size);
+        var res = buf.split(/\r?\n/);
+        var lines;
+        if (res.length && res[res.length - 1].length) {
+          prev = res[res.length - 1];
+          lines = res.slice(0, -1);
+        } else {
+          prev = '';
+          lines = res;
+        }
+        var end = pos + chunk_size;
+        if (end > f.size)
+          end = f.size;
+        await cb(lines, end * 100 / f.size);
+      }
+    },
+    foreach_req: async function(dry_run, cb) {
+      var req = {};
+      var bo = this.batch_op;
+      var op = {};
+      if (bo == 'bind_product') {
+        op.product = this.selected_product_id;
+      } else if (bo == 'unbind_product') {
+        op.unbind = true;
+      } else if (bo == 'activate') {
+        op.is_active = true;
+      } else if (bo == 'deactivate') {
+        op.is_active = false;
+      }
+      req.operation = op;
+      req.dry_run = dry_run;
+      var sm = this.selection_type;
+      var done = false;
+      if (sm == 'seq_range' && this.range_begin) {
+        var end = this.range_end;
+        if (end == null) {
+          end = this.range_begin;
+        }
+        req.seq_range = [this.range_begin, end];
+      } else if (sm == 'code_input') {
+        req.codes = this.get_codes(this.code_str);
+      } else if (sm == 'code_file') {
+        await this.iter_line_batches(this.code_file, 64 << 10, async (lines, pct) => {
+          req.codes = lines.filter(this.is_valid_code);
+          await cb(req, pct);
+        });
+        done = true;
+      } else if (sm == 'all') {
+        req.all = true;
+      }
+      if (!done) {
+        await cb(req, 100);
+      }
+    },
+    run_batch_ops: async function(dry_run) {
+      this.percent = 0;
+      this.busy++;
+      var last_percent = 0;
+      try {
+        var total = 0;
+        await this.foreach_req(dry_run, async (data, pct) => {
+          var r = await this.$root.api_post("/api/v1/code-batch-op/", data);
+          if (dry_run) {
+            total += r.data.count;
+          } else if (r.data.job_id) {
+            await this.wait_job(r.data.job_id, (job_pct) => {
+              console.log(last_percent, pct, job_pct);
+              this.percent = last_percent + (pct - last_percent) * job_pct / 100;
+            });
+          }
+          this.percent = pct;
+          last_percent = pct;
+        });
+        this.percent = 100;
+      } catch (e) {
+        this.failure = e;
+      } finally {
+        this.busy--
+      }
+      return total;
+    },
+    wait_job: async function(job_id, cb) {
+      var done = false;
+      while (!done) {
+        var r = await this.$root.api_get("/api/v1/job/" + job_id + "/");
+        var st = r.data.status;
+        if (st == 'done') {
+          cb(100);
+          return;
+        }
+        if (st != 'running' && st != 'created') {
+          throw new Error(r.data.message);
+        }
+        cb(r.data.progress);
+        await this.sleep(2000);
+      }
+    },
+    fetch_affected_rows: async function() {
+      this.nr_affected_rows = await this.run_batch_ops(true);
+    },
+    submit: async function() {
+      this.cur_step++;
+      await this.run_batch_ops(false);
+      this.message = '操作完成!';
+      this.nextstep();
+    },
+    reload: async function() {
+      //this.host_machines = await this.$root.api_get("/api/v1/host-machine/");
+      this.host_machines = [
+        {machine_id:'001', machine_name:'主机1'},
+        {machine_id:'002', machine_name:'主机2'}
+      ];
+    },
+    changeSelection: function(e){
+      if(e.target.value){
+        if(this.cur_step == 1){
+          this.hm_selected = true;
+        }else if(this.cur_step == 2){
+          this.us_selected = true;
+        }
+      }
+    },
+    show_file_selector: function(){
+      this.$refs.file_selector.show();
+    },
+  },
+  mounted() {
+    this.reload();
+  },
+  updated() {
+    if(this.cur_step == 2){
+      let timer = setInterval(async () => {
+        //需要定时执行的代码
+        //this.usb_storages = await this.$root.api_get("/api/v1/usb-storage/");
+        //以下为模拟获取到usb列表或没获取到的情况
+        if(!this.hm_selected){
+          this.usb_storages = [];
+        }else{
+          this.usb_storages = [
+            {storage_id:'0001', storage_name:'usb1'},
+            {storage_id:'0002', storage_name:'usb2'}
+          ];
+        }
+        if(this.usb_storages.length > 0){
+          this.got_usbs = true;
+          clearInterval(timer);
+        }
+      },2000);
+    }
+  }
+}
+</script>
+
+<style scoped>
+button.prevstep {
+  margin-right: 1rem;
+}
+button.opration {
+  margin-right: 1rem;
+}
+
+.btn-next:disabled {
+  background-color: #9795a8; 
+}
+</style>
+
