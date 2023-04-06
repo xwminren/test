@@ -1,0 +1,110 @@
+<template>
+  <CModal :visible="visible" @close="close(false)">
+    <CModalHeader>
+      <CModalTitle>文件夹选择</CModalTitle>
+    </CModalHeader>
+    <CModalBody>
+      <CModalTitle>
+        当前文件夹：
+        <span class="path">{{cur_folder_path}}</span>
+        <button class="btn-secondary btn btn-sm" @click="reload" :title="turnUpTip">
+          <font-awesome-icon icon="turn-up" />
+        </button>
+        <!-- <button @click="$router.go(-1)" class="btn btn-info prevstep">返回</button> -->
+      </CModalTitle> 
+      <!-- <a href="#" @click="listSubfolder">
+        {{cur_folder_path}}
+      </a> -->
+    </CModalBody>
+    <CModalBody>
+      <!-- <CListGroup>
+        <CListGroupItem v-for="e,i in rootFolders" :key="i" :value="e.folderName">
+          <CFormCheck >
+            <div @click="listSubfolder">{{ e.folderName }}</div>
+          </CFormCheck>
+        </CListGroupItem>
+      </CListGroup> -->
+      <CListGroupItem v-for="e,i in rootFolders" :key="i" :value="e.folderName">
+        <input type="checkbox" name="checkBoxTest"  :value="e.folderName" v-model="checkedFolder" />
+        <a href="#" @click="listSubfolder">
+          {{ e.folderName }}
+          <slot></slot>
+        </a>
+      </CListGroupItem>
+    </CModalBody>
+  </CModal>
+</template>
+
+<script>
+export default {
+  name: 'FileSelector',
+  props: ['title', 'body', 'verify_input', 'close_only', 'ok_button_text', 'cancel_button_text', 'cur_folder_path'],
+  components: {
+  },
+  data: function () {
+    return {
+      verify_input_: '',
+      visible: false,
+      cb: null,
+      rootFolders: [],
+      curFolderName: '',
+      turnUpTip: '返回',
+    };
+  },
+  computed: {
+    can_delete: function() {
+      return !this.verify_input || this.verify_input == this.verify_input_;
+    },
+  },
+  methods: {
+    show: async function(cb) {
+      this.cb = cb;
+      this.visible = true;
+
+    },
+    hide: function() {
+      this.visible = false;
+    },
+    close: function(ok) {
+      this.visible = false;
+      if (this.cb) {
+        this.cb(ok);
+      }
+      this.$emit('close', ok);
+    },
+    listSubfolder: function(e) {
+      console.log(e)
+      console.log(e.target.outerText)
+
+    }
+  },
+
+  created() {
+    console.log('created')
+    //this.rootFolders = this.$root.api_get("/api/v1/listFolder/")
+  },
+  mounted() {
+    console.log('mounted')
+    debugger
+    this.rootFolders = [
+      {folderName: "file1.txt", dir: false }, 
+      {folderName: "file2.jpg", dir: false }, 
+      {folderName: "subfolder", dir: true}
+    ]
+  },
+  updated() {
+    console.log('updated')
+  },
+}
+</script>
+
+<style scoped>
+button {
+  margin-right: 1rem;
+}
+.path{
+  margin-left: 0.5rem;
+  margin-right: 2rem;
+}
+</style>
+
