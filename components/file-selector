@@ -10,27 +10,20 @@
         <button class="btn-secondary btn btn-sm" @click="reload" :title="turnUpTip">
           <font-awesome-icon icon="turn-up" />
         </button>
-        <!-- <button @click="$router.go(-1)" class="btn btn-info prevstep">返回</button> -->
       </CModalTitle> 
-      <!-- <a href="#" @click="listSubfolder">
-        {{cur_folder_path}}
-      </a> -->
     </CModalBody>
     <CModalBody>
-      <!-- <CListGroup>
-        <CListGroupItem v-for="e,i in rootFolders" :key="i" :value="e.folderName">
-          <CFormCheck >
-            <div @click="listSubfolder">{{ e.folderName }}</div>
-          </CFormCheck>
-        </CListGroupItem>
-      </CListGroup> -->
       <CListGroupItem v-for="e,i in rootFolders" :key="i" :value="e.folderName">
-        <input type="checkbox" name="checkBoxTest"  :value="e.folderName" v-model="checkedFolder" />
-        <a href="#" @click="listSubfolder">
+        <input type="checkbox" name="checkBoxTest"  :value="e.folderName" v-model="folderChecked" @click="chooseFolder"/> <!--  -->
+        <a href="#" class="subFolder" @click="listSubfolder">
           {{ e.folderName }}
-          <slot></slot>
-        </a>
+          <slot name="slot1"></slot>
+        </a> 
       </CListGroupItem>
+    </CModalBody>
+    <CModalBody>
+      已选文件或文件夹：
+      <CBadge v-for="sf,i in selectedFolders" :key="i" color="info">{{sf}}</CBadge>
     </CModalBody>
   </CModal>
 </template>
@@ -46,9 +39,11 @@ export default {
       verify_input_: '',
       visible: false,
       cb: null,
+      folderChecked: false,
       rootFolders: [],
       curFolderName: '',
       turnUpTip: '返回',
+      selectedFolders: []
     };
   },
   computed: {
@@ -75,7 +70,10 @@ export default {
     listSubfolder: function(e) {
       console.log(e)
       console.log(e.target.outerText)
-
+    },
+    chooseFolder: function(e){
+      let selectedFolder = this.cur_folder_path+e.target.value
+      this.selectedFolders.push(selectedFolder)
     }
   },
 
@@ -106,5 +104,7 @@ button {
   margin-left: 0.5rem;
   margin-right: 2rem;
 }
+.subFolder{
+  margin-left: 1rem;
+}
 </style>
-
