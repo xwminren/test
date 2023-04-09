@@ -6,24 +6,24 @@
     <CModalBody>
       <CModalTitle>
         当前文件夹：
-        <span class="path">{{cur_folder_path}}</span>
-        <button class="btn-secondary btn btn-sm" @click="reload" :title="turnUpTip">
+        <span class="path">{{cur_folder_path_c}}</span>
+        <button class="btn-secondary btn btn-sm" @click="turnUpFolder" :title="turnUpTip">
           <font-awesome-icon icon="turn-up" />
         </button>
       </CModalTitle> 
     </CModalBody>
     <CModalBody>
-      <CListGroupItem v-for="e,i in rootFolders" :key="i" :value="e.folderName">
-        <input type="checkbox" name="checkBoxTest"  :value="e.folderName" v-model="folderChecked" @click="chooseFolder"/> <!--  -->
+      <CListGroupItem v-for="e,i in current_files" :key="i" >
+        <input type="checkbox" name="checkBoxTest"  :value="e.folder_name" @click="chooseFolder"/> <!--  -->
         <a href="#" class="subFolder" @click="listSubfolder">
-          {{ e.folderName }}
+          {{ e.folder_name }}
           <slot name="slot1"></slot>
         </a> 
       </CListGroupItem>
     </CModalBody>
     <CModalBody>
       已选文件或文件夹：
-      <CBadge v-for="sf,i in selectedFolders" :key="i" color="info">{{sf}}</CBadge>
+      <CBadge v-for="sf,i in selected_folders" :key="i" color="info">{{sf}}</CBadge>
     </CModalBody>
   </CModal>
 </template>
@@ -39,11 +39,11 @@ export default {
       verify_input_: '',
       visible: false,
       cb: null,
-      folderChecked: false,
-      rootFolders: [],
-      curFolderName: '',
+      current_files: [],
+      curfolder_name: '',
       turnUpTip: '返回',
-      selectedFolders: []
+      selected_folders: [],
+      cur_folder_path_c: this.cur_folder_path,
     };
   },
   computed: {
@@ -68,26 +68,47 @@ export default {
       this.$emit('close', ok);
     },
     listSubfolder: function(e) {
-      console.log(e)
-      console.log(e.target.outerText)
+      this.cur_folder_path_c = this.cur_folder_path_c + e.target.outerText
+      //this.current_files = this.$root.api_get("/api/v1"+this.cur_folder_path_c)
+      this.current_files = [
+        {folder_name: "subFile1.txt", dir: false }, 
+        {folder_name: "subFile2.jpg", dir: false }, 
+        {folder_name: "sSubFolder/", dir: true}
+      ]
     },
+
     chooseFolder: function(e){
-      let selectedFolder = this.cur_folder_path+e.target.value
-      this.selectedFolders.push(selectedFolder)
-    }
+      debugger
+      let selected_folder = this.cur_folder_path_c+e.target.value
+      if(e.target.checked){
+        this.selected_folders.push(selected_folder)
+      }else{
+        this.selected_folders.splice(this.selected_folders.indexOf(selected_folder),1)
+      }
+    },
+
+    turnUpFolder: function(){
+      let special_index = this.cur_folder_path_c.lastIndexOf("/",this.cur_folder_path_c.length-2) 
+      this.cur_folder_path_c = this.cur_folder_path_c.substr(0,special_index+1)// get turnUpFolder
+      //this.current_files = this.$root.api_get("/api/v1"+this.cur_folder_path_c)
+      this.current_files = [
+        {folder_name: "file1.txt", dir: false }, 
+        {folder_name: "file2.jpg", dir: false }, 
+        {folder_name: "subFolder/", dir: true}
+      ]
+    },
   },
 
   created() {
     console.log('created')
-    //this.rootFolders = this.$root.api_get("/api/v1/listFolder/")
+    //this.current_files = this.$root.api_get("/api/v1/listFolder/")
   },
   mounted() {
     console.log('mounted')
-    debugger
-    this.rootFolders = [
-      {folderName: "file1.txt", dir: false }, 
-      {folderName: "file2.jpg", dir: false }, 
-      {folderName: "subfolder", dir: true}
+    this.current_files = [
+      {folder_name: "file1.txt", dir: false }, 
+      {folder_name: "file2.jpg", dir: false }, 
+      {folder_name: "subFolder/", dir: true}
     ]
   },
   updated() {
@@ -107,4 +128,8 @@ button {
 .subFolder{
   margin-left: 1rem;
 }
+.badge{
+  margin-right:0.5rem;
+}
+
 </style>
