@@ -7,14 +7,14 @@
       <CModalTitle>
         当前文件夹：
         <span class="path">{{cur_folder_path_c}}</span>
-        <button class="btn-secondary btn btn-sm" @click="turnUpFolder" :title="turnUpTip">
+        <button class="btn-secondary btn btn-sm" @click="turnUpFolder" :title="turn_up_tip">
           <font-awesome-icon icon="turn-up" />
         </button>
       </CModalTitle> 
     </CModalBody>
     <CModalBody>
       <CListGroupItem v-for="e,i in current_files" :key="i" >
-        <input type="checkbox" name="checkBoxTest"  :value="e.folder_name" @click="chooseFolder"/> <!--  -->
+        <input type="checkbox" id="checkBoxFile{{i}}"  :value="cur_folder_path_c+e.folder_name" @click="chooseFolder"/> <!-- v-model="checked_box" -->
         <a href="#" class="subFolder" @click="listSubfolder">
           {{ e.folder_name }}
           <slot name="slot1"></slot>
@@ -41,7 +41,8 @@ export default {
       cb: null,
       current_files: [],
       curfolder_name: '',
-      turnUpTip: '返回',
+      checked_box: [],
+      turn_up_tip: '返回',
       selected_folders: [],
       cur_folder_path_c: this.cur_folder_path,
     };
@@ -67,36 +68,46 @@ export default {
       }
       this.$emit('close', ok);
     },
+
     listSubfolder: function(e) {
       this.cur_folder_path_c = this.cur_folder_path_c + e.target.outerText
-      //this.current_files = this.$root.api_get("/api/v1"+this.cur_folder_path_c)
-      this.current_files = [
-        {folder_name: "subFile1.txt", dir: false }, 
-        {folder_name: "subFile2.jpg", dir: false }, 
-        {folder_name: "sSubFolder/", dir: true}
-      ]
+      this.apiListAllFiles()
     },
 
     chooseFolder: function(e){
-      debugger
-      let selected_folder = this.cur_folder_path_c+e.target.value
+      let selected_folder = e.target.value
+
       if(e.target.checked){
         this.selected_folders.push(selected_folder)
+        this.checked_box.push(selected_folder)
       }else{
         this.selected_folders.splice(this.selected_folders.indexOf(selected_folder),1)
+        this.checked_box.splice(this.checked_box.indexOf(selected_folder),1)
       }
     },
 
     turnUpFolder: function(){
       let special_index = this.cur_folder_path_c.lastIndexOf("/",this.cur_folder_path_c.length-2) 
       this.cur_folder_path_c = this.cur_folder_path_c.substr(0,special_index+1)// get turnUpFolder
-      //this.current_files = this.$root.api_get("/api/v1"+this.cur_folder_path_c)
+      this.apiListAllFiles()
+    },
+
+    apiListAllFiles: function(){
+      //this.current_files = this.$root.api_get("/api/v1"+this.cur_folder_path)
       this.current_files = [
         {folder_name: "file1.txt", dir: false }, 
         {folder_name: "file2.jpg", dir: false }, 
         {folder_name: "subFolder/", dir: true}
       ]
-    },
+      this.current_files.forEach(
+        (item,index) => {
+          if(this.selected_folders.indexOf(this.cur_folder_path_c+item.folder_name)>=0){
+            debugger
+            console.log(item,index)
+          }
+        }
+      )
+    }
   },
 
   created() {
