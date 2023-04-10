@@ -25,6 +25,7 @@
           <img src='../assets/images/inject-usb.gif'/>
         </div>
         <div v-if="got_usbs">
+          <h4>已检测到USB存储设备，请选择USB设备</h4>
           <select class="form-control w-25" @change='changeSelection' v-model="selection_type">
             <option v-for="us, i in usb_storages" :key="i" :value="us.storage_id">
               {{ us.storage_name }}
@@ -41,11 +42,28 @@
         </div>
       </div>
       <div v-if="cur_step == 3">
-        <FileSelector ref="file_selector" :cur_folder_path="cur_folder_path"></FileSelector>
+        <h4>请选择USB存储设备中的文件或文件夹</h4>
+        <FileSelector ref="file_selector" :cur_folder_path="cur_folder_path" @getSelectedFiles="showSelectedLocalFiles"></FileSelector>
 
-        <button class="btn btn-primary opration" @click="show_file_selector">选择文件夹</button>
-        <button class="btn btn-secondary prevstep" @click="cur_step--">上一步</button>
-        <button class="btn btn-primary nextstep" @click="submit" :disabled="busy">提交</button>
+        <button class="btn btn-primary opration" @click="showFileSelector">选择文件夹</button>
+        <button @click="cur_step--" class="btn btn-info prevstep">返回</button>
+        <button class="btn btn-primary nextstep btn-next" :disabled='!local_file_selected'  @click="nextstep">下一步</button>
+        <CModalBody v-show="show_local_flag">
+          已选文件或文件夹：
+          <CBadge v-for="sf,i in selected_local_files" :key="i" color="info">{{sf}}</CBadge>
+        </CModalBody>
+      </div>
+      <div v-if="cur_step == 4">
+        <h4>请选择导入目标文件夹</h4>
+        <FileSelector ref="file_selector" :cur_folder_path="cur_folder_path" @getSelectedFiles="showSelectedTargetFiles"></FileSelector>
+
+        <button class="btn btn-primary opration" @click="showFileSelector">选择文件夹</button>
+        <button @click="cur_step--" class="btn btn-info prevstep">返回</button>
+        <button class="btn btn-primary nextstep btn-next" :disabled='!target_file_selected'  @click="nextstep">下一步</button>
+        <CModalBody v-show="show_target_flag">
+          已选文件或文件夹：
+          <CBadge v-for="sf,i in selected_target_files" :key="i" color="info">{{sf}}</CBadge>
+        </CModalBody>
       </div>
       <div v-if="cur_step == 4">
         <div>
@@ -103,7 +121,13 @@ export default {
       usb_storages: [],
       got_usbs: false,
       us_selected: false,
-      cur_folder_path:'/'
+      cur_folder_path: '/',
+      show_local_flag: false,
+      local_file_selected: false,
+      selected_local_files: [],
+      show_target_flag: false,
+      target_file_selected: false,
+      selected_target_files: [],
     };
   },
   computed: {
@@ -277,8 +301,18 @@ export default {
         }
       }
     },
-    show_file_selector: function(){
+    showFileSelector: function(){
       this.$refs.file_selector.show();
+    },
+    showSelectedLocalFiles: function(selected_files){
+      this.show_local_flag = true
+      this.selected_local_files = selected_files
+      this.local_file_selected = true
+    },
+    showSelectedTargetFiles: function(selected_files){
+      this.show_target_flag = true
+      this.selected_target_files = selected_files
+      this.target_file_selected = true
     },
   },
   mounted() {
@@ -320,4 +354,3 @@ button.opration {
   background-color: #9795a8; 
 }
 </style>
-
