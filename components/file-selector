@@ -14,16 +14,21 @@
     </CModalBody>
     <CModalBody>
       <CListGroupItem v-for="e,i in current_files" :key="i" >
-        <input type="checkbox" id="checkBoxFile{{i}}"  :value="cur_folder_path_c+e.folder_name" @click="chooseFolder"/> <!-- v-model="checked_box" -->
-        <a href="#" class="subFolder" @click="listSubfolder">
+        <input type="checkbox" id="checkBoxFile{{i}}" v-model="checked_box" :value="cur_folder_path_c+e.folder_name" @click="chooseFolder"/> <!-- v-model="checked_box" -->
+        <a v-if="e.dir" href="#" class="subFolder" @click="listSubfolder">
           {{ e.folder_name }}
           <slot name="slot1"></slot>
         </a> 
+        <span v-if="!e.dir" class="subFolder">{{ e.folder_name }}</span>
       </CListGroupItem>
     </CModalBody>
     <CModalBody>
       已选文件或文件夹：
-      <CBadge v-for="sf,i in selected_folders" :key="i" color="info">{{sf}}</CBadge>
+      <CBadge v-for="sf,i in selected_files" :key="i" color="info">{{sf}}</CBadge>
+    </CModalBody>
+    <CModalBody>
+      <button class="btn btn-primary "  @click="submitFiles">确认</button><!--nextstep btn-next-->
+      <button class="btn btn-primary "  @click="nextstep">取消</button>
     </CModalBody>
   </CModal>
 </template>
@@ -43,7 +48,7 @@ export default {
       curfolder_name: '',
       checked_box: [],
       turn_up_tip: '返回',
-      selected_folders: [],
+      selected_files: [],
       cur_folder_path_c: this.cur_folder_path,
     };
   },
@@ -78,10 +83,10 @@ export default {
       let selected_folder = e.target.value
 
       if(e.target.checked){
-        this.selected_folders.push(selected_folder)
+        this.selected_files.push(selected_folder)
         this.checked_box.push(selected_folder)
       }else{
-        this.selected_folders.splice(this.selected_folders.indexOf(selected_folder),1)
+        this.selected_files.splice(this.selected_files.indexOf(selected_folder),1)
         this.checked_box.splice(this.checked_box.indexOf(selected_folder),1)
       }
     },
@@ -94,20 +99,47 @@ export default {
 
     apiListAllFiles: function(){
       //this.current_files = this.$root.api_get("/api/v1"+this.cur_folder_path)
-      this.current_files = [
-        {folder_name: "file1.txt", dir: false }, 
-        {folder_name: "file2.jpg", dir: false }, 
-        {folder_name: "subFolder/", dir: true}
-      ]
+      if(this.cur_folder_path_c.match(/\//g).length == 1){//test data
+        this.current_files = [
+          {folder_name: "file1.txt", dir: false }, 
+          {folder_name: "file2.jpg", dir: false }, 
+          {folder_name: "subFolder/", dir: true}
+        ]
+      }else if(this.cur_folder_path_c.match(/\//g).length == 2){
+        this.current_files = [
+          {folder_name: "file3.txt", dir: false }, 
+          {folder_name: "file4.jpg", dir: false }, 
+          {folder_name: "file5.vue", dir: false }, 
+          {folder_name: "sSubFolder/", dir: true}
+        ]
+      }else if(this.cur_folder_path_c.match(/\//g).length == 3){
+        this.current_files = [
+          {folder_name: "file6.txt", dir: false }, 
+          {folder_name: "file7.vue", dir: false }, 
+          {folder_name: "file8.jpg", dir: false }, 
+          {folder_name: "ssSubFolder/", dir: true}
+        ]
+      }else if(this.cur_folder_path_c.match(/\//g).length == 4){
+        this.current_files = [
+          {folder_name: "file9.txt", dir: false },
+          {folder_name: "file10.vue", dir: false }
+        ]
+      }
+      
       this.current_files.forEach(
         (item,index) => {
-          if(this.selected_folders.indexOf(this.cur_folder_path_c+item.folder_name)>=0){
+          if(this.selected_files.indexOf(this.cur_folder_path_c+item.folder_name)>=0){
             debugger
             console.log(item,index)
           }
         }
       )
-    }
+    },
+
+    submitFiles: function(){
+      this.$emit('getSelectedFiles',this.selected_files)
+      this.hide()
+    },
   },
 
   created() {
