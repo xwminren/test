@@ -13,8 +13,13 @@
       </CModalTitle> 
     </CModalBody>
     <CModalBody>
+      <input type="checkbox" id="checkAll" style="margin-left: 1rem;" :disabled="parent_folder_checked" v-model="check_all" @change="changeCheckAll"/>
+      <span class="subFolder">全选/反选</span>
       <CListGroupItem v-for="e,i in current_files" :key="i" >
-        <input type="checkbox" id="checkBoxFile{{i}}" v-model="checked_box" :value="cur_folder_path_c+e.folder_name" @click="chooseFolder"/> <!-- v-model="checked_box" -->
+        <input type="checkbox" v-if="parent_folder_checked" :disabled="parent_folder_checked" v-model="all_default_selected" 
+          :value="cur_folder_path_c+e.folder_name"/> <!-- id="checkBoxFile{{i}}" -->
+        <input type="checkbox" v-if="!parent_folder_checked" v-model="selected_files" 
+        :value="cur_folder_path_c+e.folder_name" @click="chooseFolder"/> <!-- id="checkBoxFile{{i}}" -->
         <a v-if="e.dir" href="#" class="subFolder" @click="listSubfolder">
           {{ e.folder_name }}
           <slot name="slot1"></slot>
@@ -28,7 +33,7 @@
     </CModalBody>
     <CModalBody>
       <button class="btn btn-primary "  @click="submitFiles">确认</button><!--nextstep btn-next-->
-      <button class="btn btn-primary "  @click="nextstep">取消</button>
+      <button class="btn btn-primary "  @click="close(false)">取消</button>
     </CModalBody>
   </CModal>
 </template>
@@ -43,12 +48,13 @@ export default {
     return {
       verify_input_: '',
       visible: false,
-      cb: null,
       current_files: [],
       curfolder_name: '',
-      checked_box: [],
-      turn_up_tip: '返回',
+      check_all: false,
+      parent_folder_checked: false,
       selected_files: [],
+      all_default_selected: [],// when parent folder checked, listed children files are all_default_selected, only assigned in display condition temporally.
+      turn_up_tip: '返回',
       cur_folder_path_c: this.cur_folder_path,
     };
   },
@@ -58,8 +64,7 @@ export default {
     },
   },
   methods: {
-    show: async function(cb) {
-      this.cb = cb;
+    show: async function() {
       this.visible = true;
 
     },
@@ -68,10 +73,30 @@ export default {
     },
     close: function(ok) {
       this.visible = false;
-      if (this.cb) {
-        this.cb(ok);
-      }
       this.$emit('close', ok);
+    },
+
+    changeCheckAll: function(e){
+      if(e.target.checked){
+        this.current_files.map(item => {
+          debugger
+          let selected_folder_c = this.cur_folder_path_c+item.folder_name
+          let selected_folder_ind = this.selected_files.indexOf(selected_folder_c)
+          if(selected_folder_ind>=0){
+            this.selected_files.splice(selected_folder_ind,1)
+          }
+          this.selected_files.push(selected_folder_c)
+        })
+      }else{
+        this.current_files.map(item => {
+          let selected_folder_c = this.cur_folder_path_c+item.folder_name
+          let selected_folder_ind = this.selected_files.indexOf(selected_folder_c)
+          if(selected_folder_ind>=0){
+            this.selected_files.splice(selected_folder_ind,1)
+          }
+        })
+      }
+      
     },
 
     listSubfolder: function(e) {
@@ -84,10 +109,12 @@ export default {
 
       if(e.target.checked){
         this.selected_files.push(selected_folder)
-        this.checked_box.push(selected_folder)
       }else{
-        this.selected_files.splice(this.selected_files.indexOf(selected_folder),1)
-        this.checked_box.splice(this.checked_box.indexOf(selected_folder),1)
+        let selected_folder_ind = this.selected_files.indexOf(selected_folder)
+        if(selected_folder_ind>=0){
+          this.selected_files.splice(selected_folder_ind,1)
+        }
+        this.check_all = false
       }
     },
 
@@ -125,15 +152,18 @@ export default {
           {folder_name: "file10.vue", dir: false }
         ]
       }
-      
-      this.current_files.forEach(
-        (item,index) => {
-          if(this.selected_files.indexOf(this.cur_folder_path_c+item.folder_name)>=0){
-            debugger
-            console.log(item,index)
-          }
+
+      this.parent_folder_checked = false
+      for(let selected_file of this.selected_files){
+        if(this.cur_folder_path_c.indexOf(selected_file)>=0){
+          this.parent_folder_checked = true
+          this.current_files.forEach(current_file => {
+            this.all_default_selected.push(this.cur_folder_path_c+current_file)
+          })
+          break
         }
-      )
+      }
+      
     },
 
     submitFiles: function(){
