@@ -37,9 +37,6 @@
           <button @click="cur_step--" class="btn btn-info prevstep">返回</button>
           <button class="btn btn-primary nextstep btn-next" :disabled='!us_selected'  @click="nextstep">下一步</button>
         </div>
-        <div v-if="batch_op == 'bind_product'" class="my-1">
-          <GenericSelector ref="product_selector" uri="/api/v1/product/" display_field="name" @select="(item) => selected_product_id = item.id" />
-        </div>
       </div>
       <div v-if="cur_step == 3">
         <h4>请选择USB存储设备中的文件或文件夹</h4>
@@ -49,7 +46,7 @@
         <button @click="cur_step--" class="btn btn-info prevstep">返回</button>
         <button class="btn btn-primary nextstep btn-next" :disabled='!local_file_selected'  @click="nextstep">下一步</button>
         <CModalBody v-show="show_local_flag">
-          已选文件或文件夹：
+          已选USB存储设备中的文件或文件夹：
           <CBadge v-for="sf,i in selected_local_files" :key="i" color="info">{{sf}}</CBadge>
         </CModalBody>
       </div>
@@ -61,26 +58,19 @@
         <button @click="cur_step--" class="btn btn-info prevstep">返回</button>
         <button class="btn btn-primary nextstep btn-next" :disabled='!target_file_selected'  @click="nextstep">下一步</button>
         <CModalBody v-show="show_target_flag">
-          已选文件或文件夹：
+          已选导入目标文件夹：
           <CBadge v-for="sf,i in selected_target_files" :key="i" color="info">{{sf}}</CBadge>
         </CModalBody>
       </div>
-      <div v-if="cur_step == 4">
-        <div>
-          正在执行操作... ({{rounded_percent}}%)
-        </div>
-        <CProgress class="my-3">
-          <CProgressBar :value="percent" />
-        </CProgress>
-      </div>
       <div v-if="cur_step == 5">
-        <div v-if="!failure && message" class="alert alert-success">
-          {{ message }}
+        <h4>任务预览</h4>
+        <div class="alert alert-success">
+          总文件数量：{{ preview_task.total_file_count }}
+          <br>
+          预计完成时间：{{ preview_task.estimite_time }}
         </div>
-        <div v-if="failure" class="alert alert-danger">
-          {{ failure }}
-        </div>
-        <button @click="$router.go(-1)" class="btn btn-info prevstep">返回</button>
+        <button class="btn btn-primary nextstep btn-next"  @click="submit">开始任务</button>
+        <button @click="cur_step--" class="btn btn-info prevstep">返回</button>
       </div>
     </div>
     <div>
@@ -91,31 +81,16 @@
 
 <script>
 import FileSelector from '@/components/file-selector.vue';
-import GenericSelector from '../components/generic-selector';
 
 export default {
   name: 'characterWithdraw',
   props: [],
   components: {
-    GenericSelector,
     FileSelector
-},
+  },
   data: function () {
     return {
-      percent: 0,
       cur_step: 1,
-      range_begin: null,
-      range_end: null,
-      selection_type: 'code_input',
-      batch_op: 'activate',
-      nr_affected_rows: null,
-      message: null,
-      failure: null,
-      selected_product_id: null,
-      code_str: '',
-      code_file: null,
-      code_str_maxlength: 1 << 20,
-      busy: 0,
       host_machines: [],
       hm_selected: false,
       usb_storages: [],
@@ -128,161 +103,22 @@ export default {
       show_target_flag: false,
       target_file_selected: false,
       selected_target_files: [],
+      preview_task: {}
     };
   },
-  computed: {
+  /* computed: {
     rounded_percent: function() {
       return Math.floor(this.percent * 10) / 10;
     },
     show_affected_rows: function() {
       return this.selection_type != 'code_file';
     },
-  },
+  }, */
   methods: {
-    set_code_file: async function(e) {
-      var fs = e.target.files;
-      if (!fs || !fs.length)
-        return;
-      this.code_file = fs[0];
-    },
     nextstep: function() {
       this.cur_step++;
-      if (this.cur_step == 3 && this.show_affected_rows) {
-        this.fetch_affected_rows();
-      }
-    },
-    get_codes: function(lines) {
-      return lines.split(/\r?\n/).filter(this.is_valid_code);
-    },
-    is_valid_code: function(c) {
-      return c.match(/[0-9a-zA-Z]+/);
-    },
-    read_chunk: async function(f, pos, size) {
-      var r = new FileReader();
-      var end = pos + size;
-      if (end > f.size) end = f.size;
-      var b = f.slice(pos, end);
-      r.readAsText(b);
-      var cb = null;
-      var errcb = null;
-      r.onload = () => {
-        cb(r.result);
-      }
-      r.onerror = () => {
-        errcb();
-      }
-      return new Promise((accept, reject) => {
-        cb = accept;
-        errcb = reject;
-      });
-    },
-    iter_line_batches: async function(f, chunk_size, cb) {
-      var prev = "";
-      for (var pos = 0; pos < f.size; pos += chunk_size) {
-        var buf = prev + await this.read_chunk(f, pos, chunk_size);
-        var res = buf.split(/\r?\n/);
-        var lines;
-        if (res.length && res[res.length - 1].length) {
-          prev = res[res.length - 1];
-          lines = res.slice(0, -1);
-        } else {
-          prev = '';
-          lines = res;
-        }
-        var end = pos + chunk_size;
-        if (end > f.size)
-          end = f.size;
-        await cb(lines, end * 100 / f.size);
-      }
-    },
-    foreach_req: async function(dry_run, cb) {
-      var req = {};
-      var bo = this.batch_op;
-      var op = {};
-      if (bo == 'bind_product') {
-        op.product = this.selected_product_id;
-      } else if (bo == 'unbind_product') {
-        op.unbind = true;
-      } else if (bo == 'activate') {
-        op.is_active = true;
-      } else if (bo == 'deactivate') {
-        op.is_active = false;
-      }
-      req.operation = op;
-      req.dry_run = dry_run;
-      var sm = this.selection_type;
-      var done = false;
-      if (sm == 'seq_range' && this.range_begin) {
-        var end = this.range_end;
-        if (end == null) {
-          end = this.range_begin;
-        }
-        req.seq_range = [this.range_begin, end];
-      } else if (sm == 'code_input') {
-        req.codes = this.get_codes(this.code_str);
-      } else if (sm == 'code_file') {
-        await this.iter_line_batches(this.code_file, 64 << 10, async (lines, pct) => {
-          req.codes = lines.filter(this.is_valid_code);
-          await cb(req, pct);
-        });
-        done = true;
-      } else if (sm == 'all') {
-        req.all = true;
-      }
-      if (!done) {
-        await cb(req, 100);
-      }
-    },
-    run_batch_ops: async function(dry_run) {
-      this.percent = 0;
-      this.busy++;
-      var last_percent = 0;
-      try {
-        var total = 0;
-        await this.foreach_req(dry_run, async (data, pct) => {
-          var r = await this.$root.api_post("/api/v1/code-batch-op/", data);
-          if (dry_run) {
-            total += r.data.count;
-          } else if (r.data.job_id) {
-            await this.wait_job(r.data.job_id, (job_pct) => {
-              console.log(last_percent, pct, job_pct);
-              this.percent = last_percent + (pct - last_percent) * job_pct / 100;
-            });
-          }
-          this.percent = pct;
-          last_percent = pct;
-        });
-        this.percent = 100;
-      } catch (e) {
-        this.failure = e;
-      } finally {
-        this.busy--
-      }
-      return total;
-    },
-    wait_job: async function(job_id, cb) {
-      var done = false;
-      while (!done) {
-        var r = await this.$root.api_get("/api/v1/job/" + job_id + "/");
-        var st = r.data.status;
-        if (st == 'done') {
-          cb(100);
-          return;
-        }
-        if (st != 'running' && st != 'created') {
-          throw new Error(r.data.message);
-        }
-        cb(r.data.progress);
-        await this.sleep(2000);
-      }
-    },
-    fetch_affected_rows: async function() {
-      this.nr_affected_rows = await this.run_batch_ops(true);
     },
     submit: async function() {
-      this.cur_step++;
-      await this.run_batch_ops(false);
-      this.message = '操作完成!';
       this.nextstep();
     },
     reload: async function() {
@@ -314,6 +150,13 @@ export default {
       this.selected_target_files = selected_files
       this.target_file_selected = true
     },
+    previewTask: async function(){
+      //this.preview_task = await this.$root.api_get("/api/v1/preview_task/");
+      this.preview_task = {
+        total_file_count: 5,
+        estimite_time: '20s',
+      }
+    },
   },
   mounted() {
     this.reload();
@@ -338,6 +181,9 @@ export default {
         }
       },2000);
     }
+    if(this.cur_step == 5){
+      this.previewTask()
+    }
   }
 }
 </script>
@@ -349,7 +195,9 @@ button.prevstep {
 button.opration {
   margin-right: 1rem;
 }
-
+button.btn-primary{
+  margin-right: 1rem;
+}
 .btn-next:disabled {
   background-color: #9795a8; 
 }
