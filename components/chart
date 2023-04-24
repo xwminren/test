@@ -1,0 +1,155 @@
+<template>
+  <div>
+    <div class="controls">
+      <h4>扫码统计</h4>
+      <CButtonGroup class="mode-buttons" role="group" aria-label="Basic example">
+      <CButton @click="visible_mode=k" v-for="(m, k) in modes" :key="k" :color="k == visible_mode ? 'primary' : 'secondary'">{{ m.name }}</CButton>
+      </CButtonGroup>
+      <div></div>
+      <CButtonGroup class="" role="group" aria-label="Basic example">
+        <CButton @click="visible_show_mode=k" v-for="(m, k) in show_modes" :key="k" :color="k == visible_show_mode ? 'primary' : 'secondary'">{{ m.name }}</CButton>
+      </CButtonGroup>
+    </div>
+    <div v-if="visible_show_mode=='map_chart'">
+      <div class="chart" v-for="(m, k) in modes" v-show="k == visible_mode" :key="k">
+        <!-- <MapContainer></MapContainer> -->
+        <EChartMapContainer2></EChartMapContainer2>
+      </div>
+    </div>
+    <div v-else >
+      <div class="chart" v-for="(m, k) in modes" v-show="k == visible_mode" :key="k">
+        <CChart v-if="data[k]" type="bar" :data="data[k]" />
+        <div v-else class="loading">
+          <CSpinner variant="grow"/>
+          <div>
+            正在加载
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</template>
+
+<script>
+import { CChart } from '@coreui/vue-chartjs'
+//import { MapContainer } from '@/components/map-container.vue';
+import EChartMapContainer2 from '@/components/echart-map-container2.vue'
+         
+export default {
+  name: 'Chart',
+  props: [],
+  components: {
+    CChart,EChartMapContainer2
+  },
+  data: function () {
+    return {
+      data: {},
+      modes: {
+        hour: {
+          name: '最近1小时',
+          unit: 'minute',
+          hours: 1,
+        },
+        day: {
+          name: '过去24小时',
+          unit: 'hour',
+          hours: 24,
+        },
+        week: {
+          name: '最近7天',
+          unit: 'day',
+          hours: 24 * 7,
+        },
+        month: {
+          name: '过去30天 ',
+          unit: 'day',
+          hours: 24 * 30,
+        },
+      },
+      visible_mode: 'day',
+      show_modes: {
+        column_chart: {
+          name: '柱状图',
+        },
+        map_chart: {
+          name: '地图',
+        }
+      },
+      visible_show_mode: 'column_chart',
+    };
+  },
+  computed: {
+  },
+  methods: {
+    load_data: async function(mode_name) {
+      var mode = this.modes[mode_name];
+      var unit = mode.unit;
+      var until = Math.floor(Date.now() / 1000);
+      var seconds = 3600 * mode.hours;
+      var since = until - seconds;
+      var r = await this.$root.api_get('/api/v1/counter-history/?name=qr-verify-ok&since=' + since +
+                                       '&until=' + until + '&unit=' + unit);
+      var ok_data = r.data.data;
+      r = await this.$root.api_get('/api/v1/counter-history/?name=qr-verify-fail&since=' + since +
+                                   '&until=' + until + '&unit=' + unit);
+      var fail_data = r.data.data;
+      const labels = ok_data.map(x => this.format_timestamp(x[0], unit == 'day'));
+
+      if (ok_data.length != fail_data.length) return;
+
+      for (var i = 0; i < ok_data.length; i++) {
+        if (ok_data[i][0] != fail_data[i][0]) return;
+      }
+
+      var data = {
+          labels: labels,
+          datasets: [
+            {
+              label: '验证成功',
+              backgroundColor: '#00aa00',
+              data: ok_data.map(x => x[1]),
+            },
+            {
+              label: '验证失败',
+              backgroundColor: '#888888',
+              data: fail_data.map(x => x[1]),
+            },
+          ],
+      };
+      this.data[mode_name] = data;
+    },
+    reload: function() {
+      this.data = {};
+      for (var mn in this.modes) {
+        this.load_data(mn);
+      }
+    },
+  },
+  mounted() {
+    this.reload();
+  },
+}
+</script>
+
+<style scoped>
+div.controls {
+  text-align: center;
+}
+h4 {
+  margin: 3rem 0 0 0;
+}
+div.chart {
+  margin: 1rem 0;
+  border: 1px solid #888;
+  padding: 1rem;
+}
+
+.mode-buttons {
+  margin: 2rem 0;
+}
+div.loading {
+  text-align: center;
+  margin: 2rem 0 2rem;
+}
+</style>
+
