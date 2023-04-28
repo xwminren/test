@@ -13,7 +13,7 @@
       </CButtonGroup>
     </div>
     <div v-if="visible_show_mode == 'map_chart'">
-      <EChartMapContainer style="height: 200px;"></EChartMapContainer>
+      <EChartMapContainer :style="{height: '600px'}"></EChartMapContainer>
     </div>
     <div v-else>
       <div class="chart" v-for="(m, k) in modes" v-show="k == visible_mode" :key="k">
@@ -67,10 +67,10 @@ export default {
       visible_mode: 'day',
       show_modes: {
         column_chart: {
-          name: '柱状图',
+          name: '按时间段',
         },
         map_chart: {
-          name: '地图',
+          name: '按省份',
         }
       },
       visible_show_mode: 'column_chart',
@@ -156,4 +156,3 @@ div.loading {
 }
 
 </style>
-
